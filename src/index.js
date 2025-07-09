@@ -140,7 +140,8 @@ const generateImageCell = (images, options = {}) => {
 	const imageList = Array.isArray(images) ? images : [images];
 
 	// 计算每张图片的宽度（如果没指定宽度，则自动平分）
-	const imgWidth = width ? Math.floor(width / imageList.length) - 2 : '';
+	// const imgWidth = width ? Math.floor(width / imageList.length) - 2 : '';
+	const imgWidth = width;
 
 	// 生成图片HTML
 	const imagesHtml = imageList.map(img => `

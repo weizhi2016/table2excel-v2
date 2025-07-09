@@ -1,5 +1,5 @@
 {
-    "name": "js-table2excel",
+    "name": "js-table2excel-v2",
     "version": "1.2.8",
     "description": "text and image save to excel",
     "main": "dist/index.js",
@@ -7,8 +7,8 @@
         "build": "rollup -c"
     },
     "keywords": [],
-    "author": "hxj9102",
-    "repository": "https://github.com/hxj9102/table2excel.git",
+    "author": "weizhi2016",
+    "repository": "https://github.com/weizhi2016/table2excel-v2.git",
     "license": "MIT",
     "devDependencies": {
         "@babel/core": "^7.20.12",
