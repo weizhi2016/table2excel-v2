@@ -1,6 +1,6 @@
 {
     "name": "js-table2excel-v2",
-    "version": "1.2.8",
+    "version": "1.2.2",
     "description": "text and image save to excel",
     "main": "dist/index.js",
     "scripts": {

@@ -1,14 +1,14 @@
-# table2excel
-text and image save to excel
+# 前端一键导出Excel表格
+支持导出文本、单图、多图、合并 单元格等功能
 
 
-### Installation
+### 安装
 
 ```
 npm install js-table2excel-v2
 ```
 
-### Usage
+### 使用示例
 ``` javascript
 import table2excel from 'js-table2excel-v2'
 
@@ -30,7 +30,7 @@ const column = [
    {
     title: '描述',
     key: 'remark',
-    type: 'test',
+    type: 'text',
     mergeOptions: { colspan: 2 }, // 合并2列
   },
    // 注意：被合并的列不需要再定义
@@ -69,7 +69,7 @@ table2excel({
 })
 
 ```
-### table2excel options
+### 参数说明
 
 |             | type   | default |
 | ----------- | ------ | ------- |
@@ -80,10 +80,11 @@ table2excel({
 
 
 
-### column options
+### 表头参数
 
 |       | introduction    | type   | default |
 | ----- | --------------- | ------ | ------- |
 | title | name for column | String | -       |
 | key   | key for column  | String | -       |
-| type  | text\|image     | String | text    |
+| type  | text\image\images|   -  | String | text    |
+| mergeOptions  | merge options |   -  | object | text    |
