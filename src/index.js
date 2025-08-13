@@ -75,7 +75,9 @@ const tableToNotIE = (function() {
       <![endif]-->
     </head>
     <body>
-      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{table}</table>
+      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;">
+        {table}
+      </table>
     </body>
     </html>
   `;
@@ -128,55 +130,105 @@ const getMergeAttributes = (mergeOptions) => {
 };
 
 /**
- * 生成图片单元格
+ * 准备合并单元格数据（终极修复版）
  */
-const generateImageCell = (images, options = {}) => {
-	// 默认宽度、高度60px
-	const defaultHeight = 60;
-	const defaultWidth = 60;
-	const { width = defaultWidth, height = defaultHeight } = options;
+const prepareMergedData = (data, columns) => {
+	const processedData = JSON.parse(JSON.stringify(data));
+	const columnKeys = columns.map(col => col.key);
 
-	// 如果是单图，转为数组形式统一处理
-	const imageList = Array.isArray(images) ? images : [images];
+	// 创建合并映射表
+	const mergeMap = {};
 
-	// 计算每张图片的宽度（如果没指定宽度，则自动平分）
-	// const imgWidth = width ? Math.floor(width / imageList.length) - 2 : '';
-	const imgWidth = width;
+	// 第一遍：处理行合并
+	processedData.forEach((row, rowIndex) => {
+		if (row.mergeOptions) {
+			row.__rowMergeMap = {};
+			row.__colMergeMap = {};
 
-	// 生成图片HTML
-	const imagesHtml = imageList.map(img => `
-    <td align="center" valign="middle" ${imgWidth ? `width="${imgWidth}"` : ''}>
-      <img src="${img}" ${imgWidth ? `width="${imgWidth-2}"` : ''} height="${height-2}" style="display:block;"/>
-    </td>
-  `).join('');
+			Object.entries(row.mergeOptions).forEach(([key, options]) => {
+				const colIndex = columnKeys.indexOf(key);
+				if (colIndex >= 0) {
+					// 处理行合并
+					if (options.rowspan > 1) {
+						for (let i = 1; i < options.rowspan; i++) {
+							if (!mergeMap[rowIndex + i]) mergeMap[rowIndex + i] = {};
+							mergeMap[rowIndex + i][colIndex] = true;
+						}
+					}
 
+					// 处理列合并
+					if (options.colspan > 1) {
+						for (let i = 1; i < options.colspan; i++) {
+							if (colIndex + i < columnKeys.length) {
+								row.__colMergeMap[colIndex + i] = true;
+							}
+						}
+					}
+				}
+			});
+		}
+	});
+
+	// 第二遍：应用合并映射
+	processedData.forEach((row, rowIndex) => {
+		if (mergeMap[rowIndex]) {
+			row.__rowMergeMap = mergeMap[rowIndex];
+		}
+	});
+
+	return processedData;
+};
+
+/**
+ * 生成表头单元格
+ */
+const generateHeaderCell = (col) => {
 	return `
-    <td ${width ? `width="${width}"` : ''} height="${height}">
-      <table border="0" cellpadding="0" cellspacing="0" width="100%">
-        <tr>
-          ${imagesHtml}
-        </tr>
-      </table>
+    <th ${getMergeAttributes(col.mergeOptions)} 
+        style="background-color:#d9d9d9;height:40px;${col.width ? `width:${col.width}px;` : ''}padding:5px;text-align:center;">
+      ${col.title}
+    </th>
+  `;
+};
+
+/**
+ * 生成数据单元格（支持多种类型）
+ */
+const generateDataCell = (value, col, options = {}) => {
+	const { width, height = 40, mergeOptions, isMerged } = options;
+
+	if (isMerged) return ''; // 被合并的单元格留空
+
+	// 图片类型单元格
+	if (col.type === 'image' || col.type === 'images') {
+		const imageList = Array.isArray(value) ? value : [value];
+		return `
+      <td ${getMergeAttributes(mergeOptions)} 
+          style="padding:1px;height:${height}px;${width ? `width:${width}px;` : ''}">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" height="100%">
+          <tr>
+            ${imageList.map(img => `
+              <td align="center" valign="middle" style="padding:1px;">
+                <img src="${img}" style="display:block;height:${height-2}px;${width ? `max-width:${Math.floor(width/imageList.length)-2}px;` : 'width:auto;'}"/>
+              </td>
+            `).join('')}
+          </tr>
+        </table>
+      </td>
+    `;
+	}
+
+	// 普通数据单元格
+	return `
+    <td ${getMergeAttributes(mergeOptions)} 
+        style="padding:5px;${width ? `width:${width}px;` : ''}${height ? `height:${height}px;` : ''}">
+      ${value || ''}
     </td>
   `;
 };
 
 /**
- * 生成单元格HTML
- */
-const generateCellHtml = (type, value, options = {}) => {
-	const { width, height, mergeOptions } = options;
-
-	if (type === 'image' || type === 'images') {
-		return generateImageCell(value, { width, height });
-	}
-
-	const mergeAttrs = getMergeAttributes(mergeOptions);
-	return `<td ${mergeAttrs} ${width ? `width="${width}"` : ''} ${height ? `height="${height}"` : ''} style="padding:20px;">${value || ''}</td>`;
-};
-
-/**
- * 表格导出Excel主函数
+ * 通用表格导出Excel主函数（终极修复版）
  */
 const table2excel = (options) => {
 	if (!options || !options.column || !options.data) {
@@ -185,60 +237,39 @@ const table2excel = (options) => {
 	}
 
 	const { column, data, excelName = 'export', captionName } = options;
+	const columnKeys = column.map(col => col.key);
 
-	// 预处理数据，标记被合并的单元格
-	const processedData = JSON.parse(JSON.stringify(data));
-	processedData.forEach((row, rowIndex) => {
-		if (row.mergeOptions) {
-			row.__mergedColumns = [];
-			Object.entries(row.mergeOptions).forEach(([key, options]) => {
-				if (options.rowspan > 1) {
-					for (let i = 1; i < options.rowspan; i++) {
-						if (processedData[rowIndex + i]) {
-							processedData[rowIndex + i].__mergedColumns =
-								processedData[rowIndex + i].__mergedColumns || [];
-							processedData[rowIndex + i].__mergedColumns.push(key);
-						}
-					}
-				}
-			});
-		}
-	});
+	// 预处理数据，正确标记被合并的单元格
+	const processedData = prepareMergedData(data, column);
 
-	// 生成表头
-	const thead = column.reduce((html, col) => {
-		const mergeAttrs = getMergeAttributes(col.mergeOptions);
-		return html + `<th ${mergeAttrs} ${col.width ? `width="${col.width}"` : ''} ${col.height ? `height="${col.height}"` : 'height="40"'}  style="background-color:#d9d9d9;">${col.title}</th>`;
-	}, '');
+	// 生成表头行
+	const thead = `<tr>${column.map(col => generateHeaderCell(col)).join('')}</tr>`;
 
-	// 生成表格行
+	// 生成数据行
 	const tbody = processedData.map((row) => {
-		const cells = column.map((col) => {
-			if (row.__mergedColumns && row.__mergedColumns.includes(col.key)) {
-				return '';
-			}
-			return generateCellHtml(
-				col.type || 'text',
-				row[col.key],
-				{
-					width: col.width,
-					height: col.height,
-					mergeOptions: row.mergeOptions ? row.mergeOptions[col.key] : null
-				}
-			);
+		const cells = column.map((col, colIndex) => {
+			// 检查是否被行合并或列合并
+			const isRowMerged = row.__rowMergeMap?.[colIndex];
+			const isColMerged = row.__colMergeMap?.[colIndex];
+
+			return generateDataCell(row[col.key], col, {
+				width: col.width,
+				height: col.height,
+				mergeOptions: row.mergeOptions?.[col.key],
+				isMerged: isRowMerged || isColMerged
+			});
 		}).join('');
+
 		return `<tr>${cells}</tr>`;
 	}).join('');
 
 	// 构建完整表格
-	const caption = captionName ? `<caption><b>${captionName}</b></caption>` : '';
 	const table = `
-    ${caption}
-    <thead><tr>${thead}</tr></thead>
+    ${captionName ? `<caption><b>${captionName}</b></caption>` : ''}
+    <thead>${thead}</thead>
     <tbody>${tbody}</tbody>
   `;
 
-	// 导出表格
 	exportToExcel(table, excelName);
 };
 

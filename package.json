@@ -1,7 +1,7 @@
 {
     "name": "js-table2excel-v2",
-    "version": "1.2.2",
-    "description": "text and image save to excel",
+    "version": "1.2.4",
+    "description": "前端一键导出Excel表格",
     "main": "dist/index.js",
     "scripts": {
         "build": "rollup -c"
