@@ -1,6 +1,6 @@
 {
     "name": "js-table2excel-v2",
-    "version": "1.2.4",
+    "version": "1.2.6",
     "description": "前端一键导出Excel表格",
     "main": "dist/index.js",
     "scripts": {

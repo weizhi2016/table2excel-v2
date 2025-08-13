@@ -49,7 +49,7 @@ const tableToIE = (data, name) => {
 };
 
 /**
- * 非IE浏览器导出Excel
+ * 非IE浏览器导出Excel（优化版）
  */
 const tableToNotIE = (function() {
 	const uri = 'data:application/vnd.ms-excel;base64,';
@@ -67,15 +67,31 @@ const tableToNotIE = (function() {
               <x:Name>{worksheet}</x:Name>
               <x:WorksheetOptions>
                 <x:DisplayGridlines/>
+                <x:FitToPage/>
+                <x:Print>
+                  <x:FitWidth>1</x:FitWidth>
+                  <x:FitHeight>0</x:FitHeight>
+                </x:Print>
               </x:WorksheetOptions>
             </x:ExcelWorksheet>
           </x:ExcelWorksheets>
         </x:ExcelWorkbook>
       </xml>
       <![endif]-->
+      <style>
+        table {
+          table-layout: auto;
+          width: 100%;
+          max-width: 100%;
+        }
+        td, th {
+          max-width: 600px;
+          word-wrap: break-word;
+        }
+      </style>
     </head>
     <body>
-      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;">
+      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         {table}
       </table>
     </body>
@@ -130,13 +146,11 @@ const getMergeAttributes = (mergeOptions) => {
 };
 
 /**
- * 准备合并单元格数据（终极修复版）
+ * 准备合并单元格数据
  */
 const prepareMergedData = (data, columns) => {
 	const processedData = JSON.parse(JSON.stringify(data));
 	const columnKeys = columns.map(col => col.key);
-
-	// 创建合并映射表
 	const mergeMap = {};
 
 	// 第一遍：处理行合并
@@ -180,55 +194,91 @@ const prepareMergedData = (data, columns) => {
 };
 
 /**
- * 生成表头单元格
+ * 计算自适应列宽
  */
-const generateHeaderCell = (col) => {
+const calculateColumnWidth = (column, allData) => {
+	// 如果有预设宽度则使用预设
+	if (column.width) return Math.min(column.width, 600);
+
+	// 计算内容最大长度
+	let maxLength = column.title ? column.title.length : 0;
+	allData.forEach(row => {
+		const content = row[column.key];
+		if (content) {
+			if (Array.isArray(content)) {
+				content.forEach(item => {
+					const len = String(item).length;
+					if (len > maxLength) maxLength = len;
+				});
+			} else {
+				const len = String(content).length;
+				if (len > maxLength) maxLength = len;
+			}
+		}
+	});
+
+	// 根据内容长度计算宽度（1字符≈8px）
+	let width = Math.min(maxLength * 8 + 20, 600); // 最大600px
+	return Math.max(width, 80); // 最小80px
+};
+
+/**
+ * 生成表头单元格（带自适应宽度）
+ */
+const generateHeaderCell = (col, width) => {
 	return `
     <th ${getMergeAttributes(col.mergeOptions)} 
-        style="background-color:#d9d9d9;height:40px;${col.width ? `width:${col.width}px;` : ''}padding:5px;text-align:center;">
+        style="background-color:#d9d9d9;height:40px;width:${width}px;max-width:600px;padding:5px;text-align:center;">
       ${col.title}
     </th>
   `;
 };
 
 /**
- * 生成数据单元格（支持多种类型）
+ * 生成图片单元格
+ */
+const generateImageCell = (images, options = {}) => {
+	const { width, height = 40, mergeOptions } = options;
+	const imageList = Array.isArray(images) ? images : [images];
+
+	return `
+    <td ${getMergeAttributes(mergeOptions)} 
+        style="padding:1px;height:${height}px;width:${width}px;max-width:600px;">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" height="100%">
+        <tr>
+          ${imageList.map(img => `
+            <td align="center" valign="middle" style="padding:1px;">
+              <img src="${img}" style="display:block;height:${height-2}px;${width ? `max-width:${Math.floor(width/imageList.length)-2}px;` : 'width:auto;'}"/>
+            </td>
+          `).join('')}
+        </tr>
+      </table>
+    </td>
+  `;
+};
+
+/**
+ * 生成数据单元格（带自适应宽度）
  */
 const generateDataCell = (value, col, options = {}) => {
 	const { width, height = 40, mergeOptions, isMerged } = options;
 
-	if (isMerged) return ''; // 被合并的单元格留空
+	if (isMerged) return '';
 
-	// 图片类型单元格
 	if (col.type === 'image' || col.type === 'images') {
-		const imageList = Array.isArray(value) ? value : [value];
-		return `
-      <td ${getMergeAttributes(mergeOptions)} 
-          style="padding:1px;height:${height}px;${width ? `width:${width}px;` : ''}">
-        <table border="0" cellpadding="0" cellspacing="0" width="100%" height="100%">
-          <tr>
-            ${imageList.map(img => `
-              <td align="center" valign="middle" style="padding:1px;">
-                <img src="${img}" style="display:block;height:${height-2}px;${width ? `max-width:${Math.floor(width/imageList.length)-2}px;` : 'width:auto;'}"/>
-              </td>
-            `).join('')}
-          </tr>
-        </table>
-      </td>
-    `;
+		return generateImageCell(value, { width, height, mergeOptions });
 	}
 
-	// 普通数据单元格
 	return `
     <td ${getMergeAttributes(mergeOptions)} 
-        style="padding:5px;${width ? `width:${width}px;` : ''}${height ? `height:${height}px;` : ''}">
+        style="padding:5px;width:${width}px;max-width:600px;${height ? `height:${height}px;` : ''}">
       ${value || ''}
     </td>
   `;
 };
 
 /**
- * 通用表格导出Excel主函数（终极修复版）
+ * 表格导出Excel主函数（终极优化版）
  */
 const table2excel = (options) => {
 	if (!options || !options.column || !options.data) {
@@ -237,23 +287,31 @@ const table2excel = (options) => {
 	}
 
 	const { column, data, excelName = 'export', captionName } = options;
-	const columnKeys = column.map(col => col.key);
 
-	// 预处理数据，正确标记被合并的单元格
-	const processedData = prepareMergedData(data, column);
+	// 计算每列的自适应宽度
+	const columnsWithWidth = column.map(col => ({
+		...col,
+		calculatedWidth: calculateColumnWidth(col, data)
+	}));
+
+	// 预处理数据
+	const processedData = prepareMergedData(data, columnsWithWidth);
 
 	// 生成表头行
-	const thead = `<tr>${column.map(col => generateHeaderCell(col)).join('')}</tr>`;
+	const thead = `<tr>${
+		columnsWithWidth.map(col =>
+			generateHeaderCell(col, col.calculatedWidth)
+		).join('')
+	}</tr>`;
 
 	// 生成数据行
 	const tbody = processedData.map((row) => {
-		const cells = column.map((col, colIndex) => {
-			// 检查是否被行合并或列合并
+		const cells = columnsWithWidth.map((col, colIndex) => {
 			const isRowMerged = row.__rowMergeMap?.[colIndex];
 			const isColMerged = row.__colMergeMap?.[colIndex];
 
 			return generateDataCell(row[col.key], col, {
-				width: col.width,
+				width: col.calculatedWidth,
 				height: col.height,
 				mergeOptions: row.mergeOptions?.[col.key],
 				isMerged: isRowMerged || isColMerged
